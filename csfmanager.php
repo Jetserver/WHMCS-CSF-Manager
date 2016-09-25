@@ -145,31 +145,6 @@ function csfmanager_output($vars)
 
 	$config = getConfig();
 
-	// check version
-	if($config['version_check'] < (time() - (60 * 60 * 24)))
-	{
-		$newversion = file_get_contents('http://clients.jetserver.net/version/jetservercsfmanager.txt');
-
-		if(trim($newversion))
-		{
-			setConfig('version_new', trim($newversion));
-			setConfig('version_check', time());
-
-			$config['version_new'] = trim($newversion);
-		}
-	}
-
-	if(version_compare($vars['version'], $config['version_new']) < 0 && !$ajax)
-	{
-?>
-<div class="infobox">
-	<strong><span class="title"><?php echo $LANG['info']; ?></span></strong>
-	<br />
-	<?php echo sprintf($LANG['versioncheck'], $config['version_new']); ?>
-</div>
-<?php
-	}
-
 	$submit = $_REQUEST['submit'] ? true : false;
 
 	$page = $_REQUEST['page'];
