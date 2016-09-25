@@ -1,0 +1,35 @@
+.csf-pagination {
+	margin-top: 10px;
+	text-align: center;
+}
+
+.csf-pagination ul {
+	padding: 0px;
+	margin: 0px;
+	list-style: none;
+}
+
+.csf-pagination ul li {
+	display: inline-block;
+	list-style: none;
+	margin-right: 5px;
+}
+
+.csf-pagination ul li a {
+	display: inline-block;
+	background: #1A4D80;
+	padding: 3px 5px;
+	color: #fff;
+	text-decoration: none;
+	border: 1px solid #0b3156;
+}
+
+.csf-pagination ul li a:hover {
+	background: #2162A3;
+}
+
+.csf-pagination ul li a.current_page {
+	background: #DBDBDB;
+	color: #1A4D80;
+	border: 1px solid #1A4D80;
+}
