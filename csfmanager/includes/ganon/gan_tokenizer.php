@@ -1,173 +1,567 @@
-<?php //0046a
-if(!extension_loaded('ionCube Loader')){$__oc=strtolower(substr(php_uname(),0,3));$__ln='ioncube_loader_'.$__oc.'_'.substr(phpversion(),0,3).(($__oc=='win')?'.dll':'.so');if(function_exists('dl')){@dl($__ln);}if(function_exists('_il_exec')){return _il_exec();}$__ln='/ioncube/'.$__ln;$__oid=$__id=realpath(ini_get('extension_dir'));$__here=dirname(__FILE__);if(strlen($__id)>1&&$__id[1]==':'){$__id=str_replace('\\','/',substr($__id,2));$__here=str_replace('\\','/',substr($__here,2));}$__rd=str_repeat('/..',substr_count($__id,'/')).$__here.'/';$__i=strlen($__rd);while($__i--){if($__rd[$__i]=='/'){$__lp=substr($__rd,0,$__i).$__ln;if(file_exists($__oid.$__lp)){$__ln=$__lp;break;}}}if(function_exists('dl')){@dl($__ln);}}else{die('The file '.__FILE__." is corrupted.\n");}if(function_exists('_il_exec')){return _il_exec();}echo('Site error: the file <b>'.__FILE__.'</b> requires the ionCube PHP Loader '.basename($__ln).' to be installed by the website operator. If you are the website operator please use the <a href="http://www.ioncube.com/lw/">ionCube Loader Wizard</a> to assist with installation.');exit(199);
+<?php
+/**
+ * @author Niels A.D.
+ * @package Ganon
+ * @link http://code.google.com/p/ganon/
+ * @license http://dev.perl.org/licenses/artistic.html Artistic License
+ */
+
+/**
+ * Converts a document into tokens
+ *
+ * Can convert any string into tokens. The base class only supports
+ * identifier/whitespace tokens. For more tokens, the class can be
+ * easily extended.
+ *
+ * Use like:
+ * <code>
+ * <?php
+ *  $a = new Tokenizer_Base('hello word');
+ *  while ($a->next() !== $a::TOK_NULL) {
+ *    echo $a->token, ': ',$a->getTokenString(), "<br>\n";
+ *  }
+ * ?>
+ * </code>
+ *
+ * @internal The tokenizer works with a character map that connects a certain
+ * character to a certain function/token. This class is build with speed in mind.
+ */
+class Tokenizer_Base {
+
+	/**
+	 * NULL Token, used at end of document (parsing should stop after this token)
+	 */
+	const TOK_NULL = 0;
+	/**
+	 * Unknown token, used at unidentified character
+	 */
+	const TOK_UNKNOWN = 1;
+	/**
+	 * Whitespace token, used with whitespace
+	 */
+	const TOK_WHITESPACE = 2;
+	/**
+	 * Identifier token, used with identifiers
+	 */
+	const TOK_IDENTIFIER = 3;
+
+	/**
+	 * The document that is being tokenized
+	 * @var string
+	 * @internal Public for faster access!
+	 * @see setDoc()
+	 * @see getDoc()
+	 * @access private
+	 */
+	var $doc = '';
+
+	/**
+	 * The size of the document (length of string)
+	 * @var int
+	 * @internal Public for faster access!
+	 * @see $doc
+	 * @access private
+	 */
+	var $size = 0;
+
+	/**
+	 * Current (character) position in the document
+	 * @var int
+	 * @internal Public for faster access!
+	 * @see setPos()
+	 * @see getPos()
+	 * @access private
+	 */
+	var $pos = 0;
+
+	/**
+	 * Current (Line/Column) position in document
+	 * @var array (Current_Line, Line_Starting_Pos)
+	 * @internal Public for faster access!
+	 * @see getLinePos()
+	 * @access private
+	 */
+	var $line_pos = array(0, 0);
+
+	/**
+	 * Current token
+	 * @var int
+	 * @internal Public for faster access!
+	 * @see getToken()
+	 * @access private
+	 */
+	var $token = self::TOK_NULL;
+
+	/**
+	 * Startposition of token. If NULL, then current position is used.
+	 * @var int
+	 * @internal Public for faster access!
+	 * @see getTokenString()
+	 * @access private
+	 */
+	var $token_start = null;
+
+	/**
+	 * List with all the character that can be considered as whitespace
+	 * @var array|string
+	 * @internal Variable is public + asscociated array for faster access!
+	 * @internal array(' ' => true) will recognize space (' ') as whitespace
+	 * @internal String will be converted to array in constructor
+	 * @internal Result token will be {@link self::TOK_WHITESPACE};
+	 * @see setWhitespace()
+	 * @see getWhitespace()
+	 * @access private
+	 */
+	var $whitespace = " \t\n\r\0\x0B";
+
+	/**
+	 * List with all the character that can be considered as identifier
+	 * @var array|string
+	 * @internal Variable is public + asscociated array for faster access!
+	 * @internal array('a' => true) will recognize 'a' as identifer
+	 * @internal String will be converted to array in constructor
+	 * @internal Result token will be {@link self::TOK_IDENTIFIER};
+	 * @see setIdentifiers()
+	 * @see getIdentifiers()
+	 * @access private
+	 */
+	var $identifiers = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890_';
+
+	/**
+	 * All characters that should be mapped to a token/function that cannot be considered as whitespace or identifier
+	 * @var array
+	 * @internal Variable is public + asscociated array for faster access!
+	 * @internal array('a' => 'parse_a') will call $this->parse_a() if it matches the character 'a'
+	 * @internal array('a' => self::TOK_A) will set token to TOK_A if it matches the character 'a'
+	 * @see mapChar()
+	 * @see unmapChar()
+	 * @access private
+	 */
+	var $custom_char_map = array();
+
+	/**
+	 * Automaticly built character map. Built using {@link $identifiers}, {@link $whitespace} and {@link $custom_char_map}
+	 * @var array
+	 * @internal Public for faster access!
+	 * @access private
+	 */
+	var $char_map = array();
+	
+	/**
+	 * All errors found while parsing the document
+	 * @var array
+	 * @see addError()
+	 */
+	var $errors = array();
+
+	/**
+	 * Class constructor
+	 * @param string $doc Document to be tokenized
+	 * @param int $pos Position to start parsing
+	 * @see setDoc()
+	 * @see setPos()
+	 */
+	function __construct($doc = '', $pos = 0) {
+		$this->setWhitespace($this->whitespace);
+		$this->setIdentifiers($this->identifiers);
+
+		$this->setDoc($doc, $pos);
+	}
+	
+	#php4 PHP4 class constructor compatibility
+	#function Tokenizer_Base($doc = '', $pos = 0) {return $this->__construct($doc, $pos);}
+	#php4e
+
+	/**
+	 * Sets target document
+	 * @param string $doc Document to be tokenized
+	 * @param int $pos Position to start parsing
+	 * @see getDoc()
+	 * @see setPos()
+	 */
+	function setDoc($doc, $pos = 0) {
+		$this->doc = $doc;
+		$this->size = strlen($doc);
+		$this->setPos($pos);
+	}
+
+	/**
+	 * Returns target document
+	 * @return string
+	 * @see setDoc()
+	 */
+	function getDoc() {
+		return $this->doc;
+	}
+
+	/**
+	 * Sets position in document
+	 * @param int $pos
+	 * @see getPos()
+	 */
+	function setPos($pos = 0) {
+		$this->pos = $pos - 1;
+		$this->line_pos = array(0, 0);
+		$this->next();
+	}
+
+	/**
+	 * Returns current position in document (Index)
+	 * @return int
+	 * @see setPos()
+	 */
+	function getPos() {
+		return $this->pos;
+	}
+
+	/**
+	 * Returns current position in document (Line/Char)
+	 * @return array array(Line, Column)
+	 */
+	function getLinePos() {
+		return array($this->line_pos[0], $this->pos - $this->line_pos[1]);
+	}
+
+	/**
+	 * Returns current token
+	 * @return int
+	 * @see $token
+	 */
+	function getToken() {
+		return $this->token;
+	}
+
+	/**
+	 * Returns current token as string
+	 * @param int $start_offset Offset from token start
+	 * @param int $end_offset Offset from token end
+	 * @return string
+	 */
+	function getTokenString($start_offset = 0, $end_offset = 0) {
+		$token_start = ((is_int($this->token_start)) ? $this->token_start : $this->pos) + $start_offset;
+		$len = $this->pos - $token_start + 1 + $end_offset;
+		return (($len > 0) ? substr($this->doc, $token_start, $len) : '');
+	}
+
+	/**
+	 * Sets characters to be recognized as whitespace
+	 *
+	 * Used like: setWhitespace('ab') or setWhitespace(array('a' => true, 'b', 'c'));
+	 * @param string|array $ws
+	 * @see getWhitespace();
+	 */
+	function setWhitespace($ws) {
+		if (is_array($ws)) {
+			$this->whitespace = array_fill_keys(array_values($ws), true);
+			$this->buildCharMap();
+		} else {
+			$this->setWhiteSpace(str_split($ws));
+		}
+	}
+
+	/**
+	 * Returns whitespace characters as string/array
+	 * @param bool $as_string Should the result be a string or an array?
+	 * @return string|array
+	 * @see setWhitespace()
+	 */
+	function getWhitespace($as_string = true) {
+		$ws = array_keys($this->whitespace);
+		return (($as_string) ? implode('', $ws) : $ws);
+	}
+
+	/**
+	 * Sets characters to be recognized as identifier
+	 *
+	 * Used like: setIdentifiers('ab') or setIdentifiers(array('a' => true, 'b', 'c'));
+	 * @param string|array $ident
+	 * @see getIdentifiers();
+	 */
+	function setIdentifiers($ident) {
+		if (is_array($ident)) {
+			$this->identifiers = array_fill_keys(array_values($ident), true);
+			$this->buildCharMap();
+		} else {
+			$this->setIdentifiers(str_split($ident));
+		}
+	}
+
+	/**
+	 * Returns identifier characters as string/array
+	 * @param bool $as_string Should the result be a string or an array?
+	 * @return string|array
+	 * @see setIdentifiers()
+	 */
+	function getIdentifiers($as_string = true) {
+		$ident = array_keys($this->identifiers);
+		return (($as_string) ? implode('', $ident) : $ident);
+	}
+
+	/**
+	 * Maps a custom character to a token/function
+	 *
+	 * Used like: mapChar('a', self::{@link TOK_IDENTIFIER}) or mapChar('a', 'parse_identifier');
+	 * @param string $char Character that should be mapped. If set, it will be overriden
+	 * @param int|string $map If function name, then $this->function will be called, otherwise token is set to $map
+	 * @see unmapChar()
+	 */
+	function mapChar($char, $map) {
+		$this->custom_char_map[$char] = $map;
+		$this->buildCharMap();
+	}
+
+	/**
+	 * Removes a char mapped with {@link mapChar()}
+	 * @param string $char Character that should be unmapped
+	 * @see mapChar()
+	 */
+	function unmapChar($char) {
+		unset($this->custom_char_map[$char]);
+		$this->buildCharMap();
+	}
+
+	/**
+	 * Builds the {@link $map_char} array
+	 * @internal Builds single array that maps all characters. Gets called if {@link $whitespace}, {@link $identifiers} or {@link $custom_char_map} get modified
+	 */
+	protected function buildCharMap() {
+		$this->char_map = $this->custom_char_map;
+		if (is_array($this->whitespace)) {
+			foreach($this->whitespace as $w => $v) {
+				$this->char_map[$w] = 'parse_whitespace';
+			}
+		}
+		if (is_array($this->identifiers)) {
+			foreach($this->identifiers as $i => $v) {
+				$this->char_map[$i] = 'parse_identifier';
+			}
+		}
+	}
+	
+	/**
+	 * Add error to the array and appends current position
+	 * @param string $error
+	 */
+	function addError($error) {
+		$this->errors[] = htmlentities($error.' at '.($this->line_pos[0] + 1).', '.($this->pos - $this->line_pos[1] + 1).'!');
+	}
+
+	/**
+	 * Parse whitespace
+	 * @return int Token
+	 * @internal Gets called with {@link $whitespace} characters
+	 */
+	protected function parse_whitespace() {
+		$this->token_start = $this->pos;
+
+		while(++$this->pos < $this->size) {
+			if (!isset($this->whitespace[$this->doc[$this->pos]])) {
+				break;
+			} elseif($this->doc[$this->pos] === "\r") {
+				++$this->line_pos[0];
+				if ($this->doc[$this->pos + 1] === "\n") {
+					++$this->pos;
+				}
+				$this->line_pos[1] = $this->pos;
+			} elseif($this->doc[$this->pos] === "\n") {
+				++$this->line_pos[0];
+				$this->line_pos[1] = $this->pos;
+			}
+		}
+
+		--$this->pos;
+		return self::TOK_WHITESPACE;
+	}
+
+	/**
+	 * Parse identifiers
+	 * @return int Token
+	 * @internal Gets called with {@link $identifiers} characters
+	 */
+	protected function parse_identifier() {
+		$this->token_start = $this->pos;
+
+		while((++$this->pos < $this->size) && isset($this->identifiers[$this->doc[$this->pos]])) {}
+
+		--$this->pos;
+		return self::TOK_IDENTIFIER;
+	}
+
+	/**
+	 * Continues to the next token
+	 * @return int Next token ({@link TOK_NULL} if none)
+	 */
+	function next() {
+		$this->token_start = null;
+
+		if (++$this->pos < $this->size) {
+			if (isset($this->char_map[$this->doc[$this->pos]])) {
+				if (is_string($this->char_map[$this->doc[$this->pos]])) {
+					return ($this->token = $this->{$this->char_map[$this->doc[$this->pos]]}());
+				} else {
+					return ($this->token = $this->char_map[$this->doc[$this->pos]]);
+				}
+			} else {
+				return ($this->token = self::TOK_UNKNOWN);
+			}
+		} else {
+			return ($this->token = self::TOK_NULL);
+		}
+	}
+
+	/**
+	 * Finds the next token, but skips whitespace
+	 * @return int Next token ({@link TOK_NULL} if none)
+	 */
+	function next_no_whitespace() {
+		$this->token_start = null;
+
+		while (++$this->pos < $this->size) {
+			if (!isset($this->whitespace[$this->doc[$this->pos]])) {
+				if (isset($this->char_map[$this->doc[$this->pos]])) {
+					if (is_string($this->char_map[$this->doc[$this->pos]])) {
+						return ($this->token = $this->{$this->char_map[$this->doc[$this->pos]]}());
+					} else {
+						return ($this->token = $this->char_map[$this->doc[$this->pos]]);
+					}
+				} else {
+					return ($this->token = self::TOK_UNKNOWN);
+				}
+			} elseif($this->doc[$this->pos] === "\r") {
+				++$this->line_pos[0];
+				if ($this->doc[$this->pos + 1] === "\n") {
+					++$this->pos;
+				}
+				$this->line_pos[1] = $this->pos;
+			} elseif($this->doc[$this->pos] === "\n") {
+				++$this->line_pos[0];
+				$this->line_pos[1] = $this->pos;
+			}
+		}
+
+		return ($this->token = self::TOK_NULL);
+	}
+
+	/**
+	 * Finds the next token using stopcharacters
+	 *
+	 * Used like: next_search('abc') or next_seach(array('a' => true, 'b' => true, 'c' => true));
+	 * @param string|array $characters Characters to search for
+	 * @param bool $callback Should the function check the charmap after finding a character?
+	 * @return int Next token ({@link TOK_NULL} if none)
+	 */
+	function next_search($characters, $callback = true) {
+		$this->token_start = $this->pos;
+		if (!is_array($characters)) {
+			$characters = array_fill_keys(str_split($characters), true);
+		}
+
+		while(++$this->pos < $this->size) {
+			if (isset($characters[$this->doc[$this->pos]])) {
+				if ($callback && isset($this->char_map[$this->doc[$this->pos]])) {
+					if (is_string($this->char_map[$this->doc[$this->pos]])) {
+						return ($this->token = $this->{$this->char_map[$this->doc[$this->pos]]}());
+					} else {
+						return ($this->token = $this->char_map[$this->doc[$this->pos]]);
+					}
+				} else {
+					return ($this->token = self::TOK_UNKNOWN);
+				}
+			} elseif($this->doc[$this->pos] === "\r") {
+				++$this->line_pos[0];
+				if ($this->doc[$this->pos + 1] === "\n") {
+					++$this->pos;
+				}
+				$this->line_pos[1] = $this->pos;
+			} elseif($this->doc[$this->pos] === "\n") {
+				++$this->line_pos[0];
+				$this->line_pos[1] = $this->pos;
+			}
+		}
+
+		return ($this->token = self::TOK_NULL);
+	}
+
+	/**
+	 * Finds the next token by searching for a string
+	 * @param string $needle The needle that's being searched for
+	 * @param bool $callback Should the function check the charmap after finding the needle?
+	 * @return int Next token ({@link TOK_NULL} if none)
+	 */
+	function next_pos($needle, $callback = true) {
+		$this->token_start = $this->pos;
+		if (($this->pos < $this->size) && (($p = stripos($this->doc, $needle, $this->pos + 1)) !== false)) {
+
+			$len = $p - $this->pos - 1;
+			if ($len > 0) {
+				$str = substr($this->doc, $this->pos + 1, $len);
+
+				if (($l = strrpos($str, "\n")) !== false) {
+					++$this->line_pos[0];
+					$this->line_pos[1] = $l + $this->pos + 1;
+
+					$len -= $l;
+					if ($len > 0) {
+						$str = substr($str, 0, -$len);
+						$this->line_pos[0] += substr_count($str, "\n");
+					}
+				}
+			}
+
+			$this->pos = $p;
+			if ($callback && isset($this->char_map[$this->doc[$this->pos]])) {
+				if (is_string($this->char_map[$this->doc[$this->pos]])) {
+					return ($this->token = $this->{$this->char_map[$this->doc[$this->pos]]}());
+				} else {
+					return ($this->token = $this->char_map[$this->doc[$this->pos]]);
+				}
+			} else {
+				return ($this->token = self::TOK_UNKNOWN);
+			}
+		} else {
+			$this->pos = $this->size;
+			return ($this->token = self::TOK_NULL);
+		}
+	}
+	
+	/**
+	 * Expect a specific token or character. Adds error if token doesn't match.
+	 * @param string|int $token Character or token to expect
+	 * @param bool|int $do_next Go to next character before evaluating. 1 for next char, true to ignore whitespace
+	 * @param bool|int $try_next Try next character if current doesn't match. 1 for next char, true to ignore whitespace
+	 * @param bool|int $next_on_match Go to next character after evaluating. 1 for next char, true to ignore whitespace
+	 * @return bool
+	 */
+	protected function expect($token, $do_next = true, $try_next = false, $next_on_match = 1) {
+		if ($do_next) {
+			if ($do_next === 1) {
+				$this->next();
+			} else {
+				$this->next_no_whitespace();
+			}
+		}
+		
+		if (is_int($token)) {
+			if (($this->token !== $token) && ((!$try_next) || ((($try_next === 1) && ($this->next() !== $token)) || (($try_next === true) && ($this->next_no_whitespace() !== $token))))) {
+				$this->addError('Unexpected "'.$this->getTokenString().'"');
+				return false;
+			}
+		} else {
+			if (($this->doc[$this->pos] !== $token) && ((!$try_next) || (((($try_next === 1) && ($this->next() !== self::TOK_NULL)) || (($try_next === true) && ($this->next_no_whitespace() !== self::TOK_NULL))) && ($this->doc[$this->pos] !== $token)))) {
+				$this->addError('Expected "'.$token.'", but found "'.$this->getTokenString().'"');
+				return false;
+			}
+		}
+
+		if ($next_on_match) {
+			if ($next_on_match === 1) {
+				$this->next();
+			} else {
+				$this->next_no_whitespace();
+			}
+		}
+		return true;
+	}
+}
+
 ?>
-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

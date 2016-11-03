@@ -1,341 +1,948 @@
-<?php //0046a
-if(!extension_loaded('ionCube Loader')){$__oc=strtolower(substr(php_uname(),0,3));$__ln='ioncube_loader_'.$__oc.'_'.substr(phpversion(),0,3).(($__oc=='win')?'.dll':'.so');if(function_exists('dl')){@dl($__ln);}if(function_exists('_il_exec')){return _il_exec();}$__ln='/ioncube/'.$__ln;$__oid=$__id=realpath(ini_get('extension_dir'));$__here=dirname(__FILE__);if(strlen($__id)>1&&$__id[1]==':'){$__id=str_replace('\\','/',substr($__id,2));$__here=str_replace('\\','/',substr($__here,2));}$__rd=str_repeat('/..',substr_count($__id,'/')).$__here.'/';$__i=strlen($__rd);while($__i--){if($__rd[$__i]=='/'){$__lp=substr($__rd,0,$__i).$__ln;if(file_exists($__oid.$__lp)){$__ln=$__lp;break;}}}if(function_exists('dl')){@dl($__ln);}}else{die('The file '.__FILE__." is corrupted.\n");}if(function_exists('_il_exec')){return _il_exec();}echo('Site error: the file <b>'.__FILE__.'</b> requires the ionCube PHP Loader '.basename($__ln).' to be installed by the website operator. If you are the website operator please use the <a href="http://www.ioncube.com/lw/">ionCube Loader Wizard</a> to assist with installation.');exit(199);
+<?php
+/**
+ * @author Niels A.D.
+ * @package Ganon
+ * @link http://code.google.com/p/ganon/
+ * @license http://dev.perl.org/licenses/artistic.html Artistic License
+ */
+ 
+#!! <- Ignore when converting to single file
+if (!defined('GANON_NO_INCLUDES')) {
+	include_once('gan_parser_html.php');
+}
+#!
+
+/**
+ * Tokenizes a css selector query
+ */
+class Tokenizer_CSSQuery extends Tokenizer_Base {
+
+	/**
+	 * Opening bracket token, used for "["
+	 */
+	const TOK_BRACKET_OPEN = 100;
+	/**
+	 * Closing bracket token, used for "]"
+	 */
+	const TOK_BRACKET_CLOSE = 101;
+	/**
+	 * Opening brace token, used for "("
+	 */
+	const TOK_BRACE_OPEN = 102;
+	/**
+	 * Closing brace token, used for ")"
+	 */
+	const TOK_BRACE_CLOSE = 103;
+	/**
+	 * String token
+	 */
+	const TOK_STRING = 104;
+	/**
+	 * Colon token, used for ":"
+	 */
+	const TOK_COLON = 105;
+	/**
+	 * Comma token, used for ","
+	 */
+	const TOK_COMMA = 106;
+	/**
+	 * "Not" token, used for "!"
+	 */
+	const TOK_NOT = 107;
+
+	/**
+	 * "All" token, used for "*" in query
+	 */
+	const TOK_ALL = 108;
+	/**
+	 * Pipe token, used for "|"
+	 */
+	const TOK_PIPE = 109;
+	/**
+	 * Plus token, used for "+"
+	 */
+	const TOK_PLUS = 110;
+	/**
+	 * "Sibling" token, used for "~" in query
+	 */
+	const TOK_SIBLING = 111;
+	/**
+	 * Class token, used for "." in query
+	 */
+	const TOK_CLASS = 112;
+	/**
+	 * ID token, used for "#" in query
+	 */
+	const TOK_ID = 113;
+	/**
+	 * Child token, used for ">" in query
+	 */
+	const TOK_CHILD = 114;
+
+	/**
+	 * Attribute compare prefix token, used for "|="
+	 */
+	const TOK_COMPARE_PREFIX = 115;
+	/**
+	 * Attribute contains token, used for "*="
+	 */
+	const TOK_COMPARE_CONTAINS = 116;
+	/**
+	 * Attribute contains word token, used for "~="
+	 */
+	const TOK_COMPARE_CONTAINS_WORD = 117;
+	/**
+	 * Attribute compare end token, used for "$="
+	 */
+	const TOK_COMPARE_ENDS = 118;
+	/**
+	 * Attribute equals token, used for "="
+	 */
+	const TOK_COMPARE_EQUALS = 119;
+	/**
+	 * Attribute not equal token, used for "!="
+	 */
+	const TOK_COMPARE_NOT_EQUAL = 120;
+	/**
+	 * Attribute compare bigger than token, used for ">="
+	 */
+	const TOK_COMPARE_BIGGER_THAN = 121;
+	/**
+	 * Attribute compare smaller than token, used for "<="
+	 */
+	const TOK_COMPARE_SMALLER_THAN = 122;
+	/**
+	 * Attribute compare with regex, used for "%="
+	 */
+	const TOK_COMPARE_REGEX = 123;
+	/**
+	 * Attribute compare start token, used for "^="
+	 */
+	const TOK_COMPARE_STARTS = 124;
+
+	/**
+	 * Sets query identifiers
+	 * @see Tokenizer_Base::$identifiers
+	 * @access private
+	 */
+	var $identifiers = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890_-?';
+
+	/**
+	 * Map characters to match their tokens
+	 * @see Tokenizer_Base::$custom_char_map
+	 * @access private
+	 */
+	var $custom_char_map = array(
+		'.' => self::TOK_CLASS,
+		'#' => self::TOK_ID,
+		',' => self::TOK_COMMA,
+		'>' => 'parse_gt',//self::TOK_CHILD,
+
+		'+' => self::TOK_PLUS,
+		'~' => 'parse_sibling',
+
+		'|' => 'parse_pipe',
+		'*' => 'parse_star',
+		'$' => 'parse_compare',
+		'=' => self::TOK_COMPARE_EQUALS,
+		'!' => 'parse_not',
+		'%' => 'parse_compare',
+		'^' => 'parse_compare',
+		'<' => 'parse_compare',
+
+		'"' => 'parse_string',
+		"'" => 'parse_string',
+		'(' => self::TOK_BRACE_OPEN,
+		')' => self::TOK_BRACE_CLOSE,
+		'[' => self::TOK_BRACKET_OPEN,
+		']' => self::TOK_BRACKET_CLOSE,
+		':' => self::TOK_COLON
+	);
+
+	/**
+	 * Parse ">" character
+	 * @internal Could be {@link TOK_CHILD} or {@link TOK_COMPARE_BIGGER_THAN}
+	 * @return int
+	 */
+	protected function parse_gt() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			++$this->pos;
+			return ($this->token = self::TOK_COMPARE_BIGGER_THAN);
+		} else {
+			return ($this->token = self::TOK_CHILD);
+		}
+	}
+
+	/**
+	 * Parse "~" character
+	 * @internal Could be {@link TOK_SIBLING} or {@link TOK_COMPARE_CONTAINS_WORD}
+	 * @return int
+	 */
+	protected function parse_sibling() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			++$this->pos;
+			return ($this->token = self::TOK_COMPARE_CONTAINS_WORD);
+		} else {
+			return ($this->token = self::TOK_SIBLING);
+		}
+	}
+
+	/**
+	 * Parse "|" character
+	 * @internal Could be {@link TOK_PIPE} or {@link TOK_COMPARE_PREFIX}
+	 * @return int
+	 */
+	protected function parse_pipe() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			++$this->pos;
+			return ($this->token = self::TOK_COMPARE_PREFIX);
+		} else {
+			return ($this->token = self::TOK_PIPE);
+		}
+	}
+
+	/**
+	 * Parse "*" character
+	 * @internal Could be {@link TOK_ALL} or {@link TOK_COMPARE_CONTAINS}
+	 * @return int
+	 */
+	protected function parse_star() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			++$this->pos;
+			return ($this->token = self::TOK_COMPARE_CONTAINS);
+		} else {
+			return ($this->token = self::TOK_ALL);
+		}
+	}
+
+	/**
+	 * Parse "!" character
+	 * @internal Could be {@link TOK_NOT} or {@link TOK_COMPARE_NOT_EQUAL}
+	 * @return int
+	 */
+	protected function parse_not() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			++$this->pos;
+			return ($this->token = self::TOK_COMPARE_NOT_EQUAL);
+		} else {
+			return ($this->token = self::TOK_NOT);
+		}
+	}
+
+	/**
+	 * Parse several compare characters
+	 * @return int
+	 */
+	protected function parse_compare() {
+		if ($this->doc[$this->pos + 1] === '=') {
+			switch($this->doc[$this->pos++]) {
+				case '$':
+					return ($this->token = self::TOK_COMPARE_ENDS);
+				case '%':
+					return ($this->token = self::TOK_COMPARE_REGEX);
+				case '^':
+					return ($this->token = self::TOK_COMPARE_STARTS);
+				case '<':
+					return ($this->token = self::TOK_COMPARE_SMALLER_THAN);
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Parse strings (" and ')
+	 * @return int
+	 */
+	protected function parse_string() {
+		$char = $this->doc[$this->pos];
+
+		while (true) {
+			if ($this->next_search($char.'\\', false) !== self::TOK_NULL) {
+				if($this->doc[$this->pos] === $char) {
+					break;
+				} else {
+					++$this->pos;
+				}
+			} else {
+				$this->pos = $this->size - 1;
+				break;
+			}
+		}
+
+		return ($this->token = self::TOK_STRING);
+	}
+
+}
+
+/**
+ * Performs a css select query on HTML nodes
+ */
+class HTML_Selector {
+
+	/**
+	 * Parser object
+	 * @internal If string, then it will create a new instance as parser
+	 * @var Tokenizer_CSSQuery
+	 */
+	var $parser = 'Tokenizer_CSSQuery';
+
+	/**
+	 * Target of queries
+	 * @var HTML_Node
+	 */
+	var $root = null;
+
+	/**
+	 * Last performed query, result in {@link $result}
+	 * @var string
+	 */
+	var $query = '';
+
+	/**
+	 * Array of matching nodes
+	 * @var array
+	 */
+	var $result = array();
+
+	/**
+	 * Include root in search, if false the only child nodes are evaluated
+	 * @var bool
+	 */
+	var $search_root = false;
+
+	/**
+	 * Search recursively
+	 * @var bool
+	 */
+	var $search_recursive = true;
+
+	/**
+	 * Extra function map for custom filters
+	 * @var array
+	 * @internal array('root' => 'filter_root') will cause the
+	 * selector to call $this->filter_root at :root
+	 * @see HTML_Node::$filter_map
+	 */
+	var $custom_filter_map = array();
+
+	/**
+	 * Class constructor
+	 * @param HTML_Node $root {@link $root}
+	 * @param string $query
+	 * @param bool $search_root {@link $search_root}
+	 * @param bool $search_recursive {@link $search_recursive}
+	 * @param Tokenizer_CSSQuery $parser If null, then default class will be used
+	 */
+	function __construct($root, $query = '*', $search_root = false, $search_recursive = true, $parser = null) {
+		if ($parser === null) {
+			$parser = new $this->parser();
+		}
+		$this->parser = $parser;
+		$this->root =& $root;
+
+		$this->search_root = $search_root;
+		$this->search_recursive = $search_recursive;
+
+		$this->select($query);
+	}
+	
+	#php4 PHP4 class constructor compatibility
+	#function HTML_Selector($root, $query = '*', $search_root = false, $search_recursive = true, $parser = null) {return $this->__construct($root, $query, $search_root, $search_recursive, $parser);}
+	#php4e
+
+	/**
+	 * toString method, returns {@link $query}
+	 * @return string
+	 * @access private
+	 */
+	function __toString() {
+		return $this->query;
+	}
+
+	/**
+	 * Class magic invoke method, performs {@link select()}
+	 * @return array
+	 * @access private
+	 */
+	function __invoke($query = '*') {
+		return $this->select($query);
+	}
+
+	/**
+	 * Perform query
+	 * @param string $query
+	 * @return array False on failure
+	 */
+	function select($query = '*') {
+		$this->parser->setDoc($query);
+		$this->query = $query;
+		return (($this->parse()) ? $this->result : false);
+	}
+
+	/**
+	 * Trigger error
+	 * @param string $error
+	 * @internal %pos% and %tok% will be replace in string with position and token(string)
+	 * @access private
+	 */
+	protected function error($error) {
+		$error = htmlentities(str_replace(
+			array('%tok%', '%pos%'),
+			array($this->parser->getTokenString(), (int) $this->parser->getPos()),
+			$error
+		));
+
+		trigger_error($error);
+	}
+
+	/**
+	 * Get identifier (parse identifier or string)
+	 * @param bool $do_error Error on failure
+	 * @return string False on failure
+	 * @access private
+	 */
+	protected function parse_getIdentifier($do_error = true) {
+		$p =& $this->parser;
+		$tok = $p->token;
+
+		if ($tok === Tokenizer_CSSQuery::TOK_IDENTIFIER) {
+			return $p->getTokenString();
+		} elseif($tok === Tokenizer_CSSQuery::TOK_STRING) {
+			return str_replace(array('\\\'', '\\"', '\\\\'), array('\'', '"', '\\'), $p->getTokenString(1, -1));
+		} elseif ($do_error) {
+			$this->error('Expected identifier at %pos%!');
+		}
+		return false;
+	}
+
+	/**
+	 * Get query conditions (tag, attribute and filter conditions)
+	 * @return array False on failure
+	 * @see HTML_Node::match()
+	 * @access private
+	 */
+	protected function parse_conditions() {
+		$p =& $this->parser;
+		$tok = $p->token;
+
+		if ($tok === Tokenizer_CSSQuery::TOK_NULL) {
+			$this->error('Invalid search pattern(1): Empty string!');
+			return false;
+		}
+		$conditions_all = array();
+
+		//Tags
+		while ($tok !== Tokenizer_CSSQuery::TOK_NULL) {
+			$conditions = array('tags' => array(), 'attributes' => array());
+
+			if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+				$tok = $p->next();
+				if (($tok === Tokenizer_CSSQuery::TOK_PIPE) && ($tok = $p->next()) && ($tok !== Tokenizer_CSSQuery::TOK_ALL)) {
+					if (($tag = $this->parse_getIdentifier()) === false) {
+						return false;
+					}
+					$conditions['tags'][] = array(
+						'tag' => $tag,
+						'compare' => 'name'
+					);
+					$tok = $p->next_no_whitespace();
+				} else {
+					$conditions['tags'][''] = array(
+						'tag' => '',
+						'match' => false
+					);
+					if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+						$tok = $p->next_no_whitespace();
+					}
+				}
+			} elseif ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+				$tok = $p->next();
+				if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+					$conditions['tags'][] = array(
+						'tag' => '',
+						'compare' => 'namespace',
+					);
+				} elseif (($tag = $this->parse_getIdentifier()) !== false) {
+					$conditions['tags'][] = array(
+						'tag' => $tag,
+						'compare' => 'total',
+					);
+				} else {
+					return false;
+				}
+				$tok = $p->next_no_whitespace();
+			} elseif ($tok === Tokenizer_CSSQuery::TOK_BRACE_OPEN) {
+				$tok = $p->next_no_whitespace();
+				$last_mode = 'or';
+
+				while (true) {
+					$match = true;
+					$compare = 'total';
+
+					if ($tok === Tokenizer_CSSQuery::TOK_NOT) {
+						$match = false;
+						$tok = $p->next_no_whitespace();
+					}
+
+					if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+						$tok = $p->next();
+						if ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+							$this->next();
+							$compare = 'name';
+							if (($tag = $this->parse_getIdentifier()) === false) {
+								return false;
+							}
+						}
+					} elseif ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+						$tok = $p->next();
+						if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+							$tag = '';
+							$compare = 'namespace';
+						} elseif (($tag = $this->parse_getIdentifier()) === false) {
+							return false;
+						}
+						$tok = $p->next_no_whitespace();
+					} else {
+						if (($tag = $this->parse_getIdentifier()) === false) {
+							return false;
+						}
+						$tok = $p->next();
+						if ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+							$tok = $p->next();
+
+							if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+								$compare = 'namespace';
+							} elseif (($tag_name = $this->parse_getIdentifier()) !== false) {
+								$tag = $tag.':'.$tag_name;
+							} else {
+								return false;
+							}
+
+							$tok = $p->next_no_whitespace();
+						}
+					}
+					if ($tok === Tokenizer_CSSQuery::TOK_WHITESPACE) {
+						$tok = $p->next_no_whitespace();
+					}
+
+					$conditions['tags'][] = array(
+						'tag' => $tag,
+						'match' => $match,
+						'operator' => $last_mode,
+						'compare' => $compare
+					);
+					switch($tok) {
+						case Tokenizer_CSSQuery::TOK_COMMA:
+							$tok = $p->next_no_whitespace();
+							$last_mode = 'or';
+							continue 2;
+						case Tokenizer_CSSQuery::TOK_PLUS:
+							$tok = $p->next_no_whitespace();
+							$last_mode = 'and';
+							continue 2;
+						case Tokenizer_CSSQuery::TOK_BRACE_CLOSE:
+							$tok = $p->next();
+							break 2;
+						default:
+							$this->error('Expected closing brace or comma at pos %pos%!');
+							return false;
+					}
+				}
+			} elseif (($tag = $this->parse_getIdentifier(false)) !== false) {
+				$tok = $p->next();
+				if ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+					$tok = $p->next();
+
+					if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+						$conditions['tags'][] = array(
+							'tag' => $tag,
+							'compare' => 'namespace'
+						);
+					} elseif (($tag_name = $this->parse_getIdentifier()) !== false) {
+						$tag = $tag.':'.$tag_name;
+						$conditions['tags'][] = array(
+							'tag' => $tag,
+							'match' => true
+						);
+					} else {
+						return false;
+					}
+
+					$tok = $p->next();
+				} else {
+					$conditions['tags'][] = array(
+						'tag' => $tag,
+						'match' => true
+					);
+				}
+			} else {
+				unset($conditions['tags']);
+			}
+
+			//Class
+			$last_mode = 'or';
+			if ($tok === Tokenizer_CSSQuery::TOK_CLASS) {
+				$p->next();
+				if (($class = $this->parse_getIdentifier()) === false) {
+					return false;
+				}
+
+				$conditions['attributes'][] = array(
+					'attribute' => 'class',
+					'operator_value' => 'contains',
+					'value' => $class,
+					'operator_result' => $last_mode
+				);
+				$last_mode = 'and';
+				$tok = $p->next();
+			}
+
+			//ID
+			if ($tok === Tokenizer_CSSQuery::TOK_ID) {
+				$p->next();
+				if (($id = $this->parse_getIdentifier()) === false) {
+					return false;
+				}
+
+				$conditions['attributes'][] = array(
+					'attribute' => 'id',
+					'operator_value' => 'equals',
+					'value' => $id,
+					'operator_result' => $last_mode
+				);
+				$last_mode = 'and';
+				$tok = $p->next();
+			}
+
+			//Attributes
+			if ($tok === Tokenizer_CSSQuery::TOK_BRACKET_OPEN) {
+				$tok = $p->next_no_whitespace();
+
+				while (true) {
+					$match = true;
+					$compare = 'total';
+					if ($tok === Tokenizer_CSSQuery::TOK_NOT) {
+						$match = false;
+						$tok = $p->next_no_whitespace();
+					}
+
+					if ($tok === Tokenizer_CSSQuery::TOK_ALL) {
+						$tok = $p->next();
+						if ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+							$tok = $p->next();
+							if (($attribute = $this->parse_getIdentifier()) === false) {
+								return false;
+							}
+							$compare = 'name';
+							$tok = $p->next();
+						} else {
+							$this->error('Expected pipe at pos %pos%!');
+							return false;
+						}
+					} elseif ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+						$tok = $p->next();
+						if (($tag = $this->parse_getIdentifier()) === false) {
+							return false;
+						}
+						$tok = $p->next_no_whitespace();
+					} elseif (($attribute = $this->parse_getIdentifier()) !== false) {
+						$tok = $p->next();
+						if ($tok === Tokenizer_CSSQuery::TOK_PIPE) {
+							$tok = $p->next();
+
+							if (($attribute_name = $this->parse_getIdentifier()) !== false) {
+								$attribute = $attribute.':'.$attribute_name;
+							} else {
+								return false;
+							}
+
+							$tok = $p->next();
+						}
+					} else {
+						return false;
+					}
+					if ($tok === Tokenizer_CSSQuery::TOK_WHITESPACE) {
+						$tok = $p->next_no_whitespace();
+					}
+
+					$operator_value = '';
+					$val = '';
+					switch($tok) {
+						case Tokenizer_CSSQuery::TOK_COMPARE_PREFIX:
+						case Tokenizer_CSSQuery::TOK_COMPARE_CONTAINS:
+						case Tokenizer_CSSQuery::TOK_COMPARE_CONTAINS_WORD:
+						case Tokenizer_CSSQuery::TOK_COMPARE_ENDS:
+						case Tokenizer_CSSQuery::TOK_COMPARE_EQUALS:
+						case Tokenizer_CSSQuery::TOK_COMPARE_NOT_EQUAL:
+						case Tokenizer_CSSQuery::TOK_COMPARE_REGEX:
+						case Tokenizer_CSSQuery::TOK_COMPARE_STARTS:
+						case Tokenizer_CSSQuery::TOK_COMPARE_BIGGER_THAN:
+						case Tokenizer_CSSQuery::TOK_COMPARE_SMALLER_THAN:
+							$operator_value = $p->getTokenString(($tok === Tokenizer_CSSQuery::TOK_COMPARE_EQUALS) ? 0 : -1);
+							$p->next_no_whitespace();
+
+							if (($val = $this->parse_getIdentifier()) === false) {
+								return false;
+							}
+
+							$tok = $p->next_no_whitespace();
+							break;
+					}
+
+					if ($operator_value && $val) {
+						$conditions['attributes'][] = array(
+							'attribute' => $attribute,
+							'operator_value' => $operator_value,
+							'value' => $val,
+							'match' => $match,
+							'operator_result' => $last_mode,
+							'compare' => $compare
+						);
+					} else {
+						$conditions['attributes'][] = array(
+							'attribute' => $attribute,
+							'value' => $match,
+							'operator_result' => $last_mode,
+							'compare' => $compare
+						);
+					}
+
+					switch($tok) {
+						case Tokenizer_CSSQuery::TOK_COMMA:
+							$tok = $p->next_no_whitespace();
+							$last_mode = 'or';
+							continue 2;
+						case Tokenizer_CSSQuery::TOK_PLUS:
+							$tok = $p->next_no_whitespace();
+							$last_mode = 'and';
+							continue 2;
+						case Tokenizer_CSSQuery::TOK_BRACKET_CLOSE:
+							$tok = $p->next();
+							break 2;
+						default:
+							$this->error('Expected closing bracket or comma at pos %pos%!');
+							return false;
+					}
+				}
+			}
+
+			if (count($conditions['attributes']) < 1) {
+				unset($conditions['attributes']);
+			}
+
+			while($tok === Tokenizer_CSSQuery::TOK_COLON) {
+				if (count($conditions) < 1) {
+					$conditions['tags'] = array(array(
+						'tag' => '',
+						'match' => false
+					));
+				}
+
+				$tok = $p->next();
+				if (($filter = $this->parse_getIdentifier()) === false) {
+					return false;
+				}
+
+				if (($tok = $p->next()) === Tokenizer_CSSQuery::TOK_BRACE_OPEN) {
+					$start = $p->pos;
+					$count = 1;
+					while ((($tok = $p->next()) !== Tokenizer_CSSQuery::TOK_NULL) && !(($tok === Tokenizer_CSSQuery::TOK_BRACE_CLOSE) && (--$count === 0))) {
+						if ($tok === Tokenizer_CSSQuery::TOK_BRACE_OPEN) {
+							++$count;
+						}
+					}
+
+
+					if ($tok !== Tokenizer_CSSQuery::TOK_BRACE_CLOSE) {
+						$this->error('Expected closing brace at pos %pos%!');
+						return false;
+					}
+					$len = $p->pos - 1 - $start;
+					$params = (($len > 0) ? substr($p->doc, $start + 1, $len) : '');
+					$tok = $p->next();
+				} else {
+					$params = '';
+				}
+
+				$conditions['filters'][] = array('filter' => $filter, 'params' => $params);
+			}
+			if (count($conditions) < 1) {
+				$this->error('Invalid search pattern(2): No conditions found!');
+				return false;
+			}
+			$conditions_all[] = $conditions;
+
+			if ($tok === Tokenizer_CSSQuery::TOK_WHITESPACE) {
+				$tok = $p->next_no_whitespace();
+			}
+
+			if ($tok === Tokenizer_CSSQuery::TOK_COMMA) {
+				$tok = $p->next_no_whitespace();
+				continue;
+			} else {
+				break;
+			}
+		}
+
+		return $conditions_all;
+	}
+
+
+	/**
+	 * Evaluate root node using custom callback
+	 * @param array $conditions {@link parse_conditions()}
+	 * @param bool|int $recursive
+	 * @param bool $check_root
+	 * @return array
+	 * @access private
+	 */
+	protected function parse_callback($conditions, $recursive = true, $check_root = false) {
+		$c = var_export($conditions, true);
+		$f = var_export($this->custom_filter_map, true);
+		$func =
+<<<func
+	static \$conditions = $c;
+	static \$filter_map = $f;
+	return (\$e->match(\$conditions, true, \$filter_map));
+func;
+		//'return ($e->match(unserialize(\''.serialize($conditions).'\'), true, unserialize(\''.serialize($this->custom_filter_map).'\')));'),
+		return ($this->result = $this->root->getChildrenByCallback(
+			create_function('$e', $func),
+			$recursive,
+			$check_root
+		));
+	}
+
+	/**
+	 * Parse first bit of query, only root node has to be evaluated now
+	 * @param bool|int $recursive
+	 * @return bool
+	 * @internal Result of query is set in {@link $result}
+	 * @access private
+	 */
+	protected function parse_single($recursive = true) {
+		if (($c = $this->parse_conditions()) === false) {
+			return false;
+		}
+
+		$this->parse_callback($c, $recursive, $this->search_root);
+		return true;
+	}
+
+	/**
+	 * Evaluate sibling nodes
+	 * @return bool
+	 * @internal Result of query is set in {@link $result}
+	 * @access private
+	 */
+	protected function parse_adjacent() {
+		$tmp = $this->result;
+		$this->result = array();
+		if (($c = $this->parse_conditions()) === false) {
+			return false;
+		}
+
+		foreach($tmp as $t) {
+			if (($sibling = $t->getNextSibling()) !== false) {
+				if ($sibling->match($c, true, $this->custom_filter_map)) {
+					$this->result[] = $sibling;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Evaluate {@link $result}
+	 * @param bool $parent Evaluate parent nodes
+	 * @param bool|int $recursive
+	 * @return bool
+	 * @internal Result of query is set in {@link $result}
+	 * @access private
+	 */
+	protected function parse_result($parent = false, $recursive = true) {
+		$tmp = $this->result;
+		$tmp_res = array();
+		if (($c = $this->parse_conditions()) === false) {
+			return false;
+		}
+
+		foreach(array_keys($tmp) as $t) {
+			$this->root = (($parent) ? $tmp[$t]->parent : $tmp[$t]);
+			$this->parse_callback($c, $recursive);
+			foreach(array_keys($this->result) as $r) {
+				if (!in_array($this->result[$r], $tmp_res, true)) {
+					$tmp_res[] = $this->result[$r];
+				}
+			}
+		}
+		$this->result = $tmp_res;
+		return true;
+	}
+
+	/**
+	 * Parse full query
+	 * @return bool
+	 * @internal Result of query is set in {@link $result}
+	 * @access private
+	 */
+	protected function parse() {
+		$p =& $this->parser;
+		$p->setPos(0);
+		$this->result = array();
+
+		if (!$this->parse_single()) {
+			return false;
+		}
+
+		while (count($this->result) > 0) {
+			switch($p->token) {
+				case Tokenizer_CSSQuery::TOK_CHILD:
+					$this->parser->next_no_whitespace();
+					if (!$this->parse_result(false, 1)) {
+						return false;
+					}
+					break;
+
+				case Tokenizer_CSSQuery::TOK_SIBLING:
+					$this->parser->next_no_whitespace();
+					if (!$this->parse_result(true, 1)) {
+						return false;
+					}
+					break;
+
+				case Tokenizer_CSSQuery::TOK_PLUS:
+					$this->parser->next_no_whitespace();
+					if (!$this->parse_adjacent()) {
+						return false;
+					}
+					break;
+
+				case Tokenizer_CSSQuery::TOK_ALL:
+				case Tokenizer_CSSQuery::TOK_IDENTIFIER:
+				case Tokenizer_CSSQuery::TOK_STRING:
+				case Tokenizer_CSSQuery::TOK_BRACE_OPEN:
+				case Tokenizer_CSSQuery::TOK_BRACKET_OPEN:
+				case Tokenizer_CSSQuery::TOK_ID:
+				case Tokenizer_CSSQuery::TOK_CLASS:
+				case Tokenizer_CSSQuery::TOK_COLON:
+					if (!$this->parse_result()) {
+						return false;
+					}
+					break;
+
+				case Tokenizer_CSSQuery::TOK_NULL:
+					break 2;
+
+				default:
+					$this->error('Invalid search pattern(3): No result modifier found!');
+					return false;
+			}
+		}
+
+		return true;
+	}
+}
+
 ?>
-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
