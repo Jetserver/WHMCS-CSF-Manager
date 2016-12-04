@@ -1,7 +1,7 @@
 <?php
 /*
 *
-* BackupManager @ package
+* CSF Manager @ package
 * Created By Idan Ben-Ezra
 *
 * Copyrights @ Jetserver Web Hosting

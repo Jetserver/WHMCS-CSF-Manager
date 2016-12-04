@@ -1,6 +1,25 @@
 <?php
-$_ADDONLANG['versioncheck'] = 'New version %1$s is available';
-$_ADDONLANG['ipreleasedok'] = 'The IP %1$s was released successfully';
+/*
+ *
+ * JetCSFManager @ whmcs module package
+ * Created By Idan Ben-Ezra
+ *
+ * Copyrights @ Jetserver Web Hosting
+ * http://jetserver.net
+ *
+ **/
+
+if (!defined("WHMCS"))
+	die("This file cannot be accessed directly");
+
+$_ADDONLANG['page_firewall'] = "Firewall Manager";
+$_ADDONLANG['page_broadcast'] = "Broadcast Configuration";
+$_ADDONLANG['page_allowedlog'] = "Clients Allowed IP's Logs";
+$_ADDONLANG['page_allowkeys'] = "Clients Allowed Email Keys";
+$_ADDONLANG['page_generatekey'] = "Generate Email Keys";
+$_ADDONLANG['page_settings'] = "Settings";
+$_ADDONLANG['version_check'] = "New version is available [ %1\$s ].<br /><a href='http://www.jetserver.net/whmcs-csf-manager' target='_blank'>Please go to our product page for more details</a>";
+
 $_ADDONLANG['cantunblockip'] = 'There was an error while trying release the IP %1$s';
 $_ADDONLANG['yourip'] = 'Your IP address is %1$s';
 $_ADDONLANG['invalidip'] = 'The IP address you entered is invalid';
@@ -53,7 +72,7 @@ $_ADDONLANG['seconds'] = 'Seconds';
 $_ADDONLANG['minutes'] = 'Minutes';
 $_ADDONLANG['hours'] = 'Hours';
 $_ADDONLANG['days'] = 'Days';
-$_ADDONLANG['ipreleasedok'] = 'The IP Address (%1$s) Unblocked Successfully';
+$_ADDONLANG['ipreleasedok'] = 'The IP Address (%1$s) Unblocked Successfully from %2$s';
 $_ADDONLANG['cantunblockip'] = 'We couldn\'t unblock your ip address (%1$s) on this server.';
 $_ADDONLANG['cantsetip'] = 'Can\'t set the IP (%1$s)';
 $_ADDONLANG['bruteerrorftp'] = 'You tried to login to your FTP account with incorrect details';

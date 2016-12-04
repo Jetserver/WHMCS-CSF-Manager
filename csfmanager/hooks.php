@@ -18,9 +18,9 @@ add_hook('ClientAreaPage', 1, function($vars) {
 	{
 		require_once(dirname(__FILE__) . '/includes/functions.php');
 
-		$config = getConfig();
-
-		$allowed_servers = explode(',', $config['servers']);
+		$instance = csfmanager::getInstance();
+		
+		$allowed_servers = explode(',', $instance->getConfig('servers'));
 
 		if(in_array($vars['serverdata']['id'], $allowed_servers))
 		{

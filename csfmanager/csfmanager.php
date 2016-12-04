@@ -1,14 +1,26 @@
 <?php
-
+/*
+ *
+ * JetCSFManager @ whmcs module package
+ * Created By Idan Ben-Ezra
+ *
+ * Copyrights @ Jetserver Web Hosting
+ * http://jetserver.net
+ *
+ **/
 if (!defined("WHMCS"))
 	die("This file cannot be accessed directly");
 
+define('JETCSFMANAGER', true);
+if(!defined('JCSF_ROOT_PATH'))  define('JCSF_ROOT_PATH', dirname(__FILE__));
+if(!defined('WHMCS_ROOT_PATH')) define('WHMCS_ROOT_PATH', realpath(JCSF_ROOT_PATH . '/../'));
+	
 function csfmanager_config() 
 {
 	return array(
 		'name' 		=> 'Jetserver CSF Manager',
 		'description' 	=> 'Manage your servers ConfigServer Firewall & Security',
-    		'version' 	=> '1.1.3',
+		'version' 	=> '1.1.4',
 		'author' 	=> 'Idan Ben-Ezra',
 		'language' 	=> 'english',
 	);
@@ -134,79 +146,156 @@ function csfmanager_output($vars)
 {
 	global $whmcs, $cc_encryption_hash, $LANG, $CONFIG, $_LANG;
 
-	require_once(dirname(__FILE__) . '/includes/functions.php');
-	require_once(dirname(__FILE__) . '/includes/class_firewall.php');
-	require_once(dirname(__FILE__) . '/includes/class_cpanel.php');
-	require_once(dirname(__FILE__) . '/includes/ganon/ganon.php');
+	require_once(JCSF_ROOT_PATH . '/includes/functions.php');
+	require_once(JCSF_ROOT_PATH . '/includes/class_firewall.php');
+	require_once(JCSF_ROOT_PATH . '/includes/class_cpanel.php');
+	require_once(JCSF_ROOT_PATH . '/includes/ganon/ganon.php');
 
 	$modulelink = $vars['modulelink'];
 	$LANG = array_merge($_LANG, $vars['_lang']);
-	$ajax = $_REQUEST['ajax'];
 
-	$config = getConfig();
-
-	$submit = $_REQUEST['submit'] ? true : false;
-
-	$page = $_REQUEST['page'];
-	$pages = array('firewall','broadcast','allowedlog','allowkeys','generatekey','settings');
-	$page = in_array($page, $pages) ? $page : $pages[0];
-
-
-	if(!$ajax)
+	$pages = array('firewall'/*,'broadcast'*/,'allowedlog','allowkeys','generatekey','settings');
+	
+	$id = csfmanager::request_var('id', 0);
+	$pagename = csfmanager::request_var('pagename', 'firewall', $pages);
+	$view = csfmanager::request_var('view', '');
+	$action = csfmanager::request_var('action', '');
+	$page = csfmanager::request_var('page', 0);	
+	$global_success = csfmanager::request_var('success', '');
+	$global_error = csfmanager::request_var('error', '');
+	
+	$instance = csfmanager::getInstance();
+	$new_version = '';
+		
+	if($instance->getConfig('version_check') < (time() - (60 * 60 * 24)))
 	{
-?>
-
-<link href="../modules/addons/csfmanager/css/style.css" rel="stylesheet" type="text/css" />
-
-<ul class="nav nav-tabs admin-tabs">
-	<li<?php if($page == 'firewall') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=firewall">Firewall Manager</a></li>
-	<li<?php if($page == 'broadcast') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=broadcast">Broadcast Configuration</a></li>
-	<li<?php if($page == 'allowedlog') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=allowedlog">Clients Allowed IP's Logs</a></li>
-	<li<?php if($page == 'allowkeys') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=allowkeys">Clients Allowed Email Keys</a></li>
-	<li<?php if($page == 'generatekey') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=generatekey">Generate Email Keys</a></li>
-	<li<?php if($page == 'settings') { ?> class="active"<?php } ?>><a href="<?php echo $modulelink; ?>&page=settings">Settings</a></li>
-</ul>
-
-<div class="tab-content admin-tabs">
-	<div class="tab-pane active" style="position: relative;">
-
-<?php
-
+		$newversion = file_get_contents('http://jetlicense.com/versions/jetservercsfmanager.txt');
+	
+		if(trim($newversion))
+		{
+			$instance->setConfig('version_new', trim($newversion));
+			$instance->setConfig('version_check', time());
+		}
+	}
+	
+	if(version_compare($vars['version'], $instance->getConfig('version_new')) < 0)
+	{
+		$new_version = $instance->getConfig('version_new');
 	}
 
-	define('CSFMANAGER', true);
-
-	$page_file = dirname(__FILE__) . "/pages/{$page}.php";
-
-	if(file_exists($page_file))
+	$view_class = "{$pagename}_default";
+	$default_view = JCSF_ROOT_PATH . "/views/{$view_class}.php";
+	
+	if(file_exists($default_view))
 	{
-		include($page_file);
+		require_once($default_view);
+	
+		if($view && $view != 'default')
+		{
+			// load the requested view
+			$view_class = "{$pagename}_{$view}";
+			$view_file = JCSF_ROOT_PATH . "/views/{$view_class}.php";
+	
+			if(file_exists($view_file))
+			{
+				require_once($view_file);
+			}
+			else
+			{
+				csfmanager::trigger_message(false, 'The requested view not exists');
+			}
+		}
+	
+		if(!defined('JCSF_TRIGGER'))
+		{
+			$view_class = "jcsf_{$view_class}";
+			$module = new $view_class;
+	
+			$default_response = $module->_default();
+	
+			if(isset($default_response['success']) && $default_response['success'])
+			{
+				if($action)
+				{
+					if(method_exists($module, $action))
+					{
+						$action_response = $module->$action();
+	
+						if(isset($action_response['errormessages']) && sizeof($action_response['errormessages']))
+						{
+							$template_file = JCSF_ROOT_PATH . "/template/{$pagename}_" . ($view ? $view : 'default') . ".php";
+	
+							if(file_exists($template_file))
+							{
+								require_once($template_file);
+							}
+							else
+							{
+								csfmanager::trigger_message(false, "The file {$template_file} is missing!");
+							}
+						}
+						else
+						{
+							header('Location: ' . $modulelink . '&pagename=' . $pagename . ($page ? '&page=' . $page : '') . ($filter ? '&filter=1' : '') . '&' . ($action_response['success'] ? 'success=' : 'error=') . $action_response['message']);
+							exit;
+						}
+					}
+					else
+					{
+						csfmanager::trigger_message(false, "Invalid action provided");
+					}
+				}
+				else
+				{
+					$action_response['data'] = $default_response['data'];
+	
+					$template_file = JCSF_ROOT_PATH . "/template/{$pagename}_" . ($view ? $view : 'default') . ".php";
+	
+					if(file_exists($template_file))
+					{
+						require_once($template_file);
+					}
+					else
+					{
+						csfmanager::trigger_message(false, "The file {$template_file} is missing!");
+					}
+				}
+			}
+			else
+			{
+				csfmanager::trigger_message(false, nl2br($default_response['message']), E_USER_WARNING);
+			}
+		}
 	}
 	else
 	{
-?>
-<div class="errorbox">
-	<strong><span class="title"><?php echo $LANG['error']; ?></span></strong>
-	<br />
-	The file <?php echo $page_file; ?> not exists
-</div>
-<?php
+		csfmanager::trigger_message(false, 'The file ' . $default_view . ' is missing!');
 	}
-
+	
+	if(defined('JCSF_TRIGGER'))
+	{
+		$template_file = JCSF_ROOT_PATH . "/template/message.php";
+	
+		if(file_exists($template_file))
+		{
+			require_once($template_file);
+		}
+		else
+		{
 ?>
-
+	<div class="errorbox">
+		<strong><span class="title">Error!</span></strong><br />
+		The file <?php echo $template_file; ?> is missing!
 	</div>
-</div>
-
-<p style="text-align: center;">Plugin Version <?php echo $vars['version']; ?></p>
-
-<?php
+	<?php
+		}
+	}
 }
 
 function csfmanager_clientarea($vars) 
 {
 	global $whmcs, $CONFIG, $_LANG;
-
+		
 	$modulelink = $vars['modulelink'];
 	$version = $vars['version'];
 	$LANG = array_merge($_LANG, $vars['_lang']);
@@ -218,31 +307,31 @@ function csfmanager_clientarea($vars)
 	$output = array();
 	$tplfile = '';
 
-	require_once(dirname(__FILE__) . '/includes/functions.php');
-	require_once(dirname(__FILE__) . '/includes/class_firewall.php');
-	require_once(dirname(__FILE__) . '/includes/class_cpanel.php');
-	require_once(dirname(__FILE__) . '/includes/ganon/ganon.php');
+	require_once(JCSF_ROOT_PATH . '/includes/functions.php');
+	require_once(JCSF_ROOT_PATH . '/includes/class_firewall.php');
+	require_once(JCSF_ROOT_PATH . '/includes/class_cpanel.php');
+	require_once(JCSF_ROOT_PATH . '/includes/ganon/ganon.php');
+	
+	$instance = csfmanager::getInstance();
 
-	$config = getConfig();
-
-	$pid 	= intval($_REQUEST['id']);
+	$pid 	= csfmanager::request_var('id', 0);
 	$uid 	= intval($_SESSION['uid']);
 	$aid 	= intval($_SESSION['adminid']);
 
-	$submit = $_REQUEST['submit'] ? true : false;
+	$submit = isset($_REQUEST['submit']);
 
 	$cip	= trim($_SERVER['REMOTE_ADDR']);
-	$page 	= $_REQUEST['page'];
-	$action = $_REQUEST['action'];
+	$page 	= csfmanager::request_var('page');
+	$action = csfmanager::request_var('action');
 	$email 	= trim($_REQUEST['email']);
 	$ip 	= trim($_REQUEST['ip']);
 	$key 	= trim($_REQUEST['key']);
 
-	if($config['permission_allowemail'] && $action == 'allow' && strlen($key) == 32)
+	if($instance->getConfig('permission_allowemail') && $action == 'allow' && strlen($key) == 32)
 	{
 		$sql = "SELECT *
 			FROM mod_csfmanager_allow_keys
-			WHERE key_hash = '" . mysql_real_escape_string($key) . "'
+			WHERE key_hash = '" . mysql_escape_string($key) . "'
 			AND key_clicks_remained > 0
 			AND key_expire > '" . time() . "'
 			AND key_cancelled = 0";
@@ -263,7 +352,7 @@ function csfmanager_clientarea($vars)
 					AND p.type IN ('hostingaccount','reselleraccount','server')
 					INNER JOIN tblservers as s
 					ON h.server = s.id
-					" . (trim($config['servers']) ? "AND s.id IN ({$config['servers']})" : '') . "
+					" . (trim($instance->getConfig('servers')) ? "AND s.id IN (" . $instance->getConfig('servers') . ")" : '') . "
 					WHERE h.domainstatus = 'Active'
 					AND h.id = '{$key_details['product_id']}'"; 
 				$result = mysql_query($sql);
@@ -272,7 +361,7 @@ function csfmanager_clientarea($vars)
 				if($product_details)
 				{
 					$product_details['password'] = decrypt($product_details['password'], $cc_encryption_hash);
-					$response = checkCsfAlive($product_details);
+					$response = csfmanager::checkCsfAlive($product_details);
 
 					if(!$response['success'])
 					{
@@ -285,9 +374,9 @@ function csfmanager_clientarea($vars)
 
 						if($Firewall->setIP($ip))
 						{
-							if(intval($config['allowlength']) > 0 && in_array($config['allowlength_type'], array('seconds','minutes','hours','days')))
+							if(intval($instance->getConfig('allowlength')) > 0 && in_array($instance->getConfig('allowlength_type'), array('seconds','minutes','hours','days')))
 							{
-								$allow = $Firewall->temporaryAllow($config['allowlength'], $config['allowlength_type'], $reason);
+								$allow = $Firewall->temporaryAllow($instance->getConfig('allowlength'), $instance->getConfig('allowlength_type'), $reason);
 
 								if($allow['success'])
 								{
@@ -298,7 +387,7 @@ function csfmanager_clientarea($vars)
 									if(strpos($response, "{$ip} allowed") !== false)
 									{
 										logActivity("Jetserver CSF Manager :: The IP {$ip} whitelisted by email key id {$key_details['key_id']}");
-										$output['successes'][] = sprintf($LANG['tempallowipok'], $ip, $config['allowlength'], $LANG[strtolower($config['allowlength_type'])]);
+										$output['successes'][] = sprintf($LANG['tempallowipok'], $ip, $instance->getConfig('allowlength'), $instance->lang(strtolower($instance->getConfig('allowlength_type'))));
 
 										$allowlength = array(
 											'seconds'	=> 1,
@@ -310,7 +399,7 @@ function csfmanager_clientarea($vars)
 										$now = time();
 
 										$sql = "INSERT INTO mod_csfmanager_allow (`clientid`,`serverid`,`ip`,`time`,`expiration`,`reason`) VALUES
-											('{$key_details['user_id']}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($config['allowlength_type'])] * $config['allowlength'])) . "','" . mysql_real_escape_string($reason) . "')";
+											('{$key_details['user_id']}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysql_escape_string($reason) . "')";
 										mysql_query($sql);
 
 										$sql = "UPDATE mod_csfmanager_allow_keys
@@ -333,8 +422,8 @@ function csfmanager_clientarea($vars)
 							}
 							else
 							{
-								if(intval($config['allowlength']) <= 0) $output['errors'][] = $LANG['lengthinvalid'];
-								if(!in_array($config['allowlength_type'], array('seconds','minutes','hours','days'))) $output['errors'][] = $LANG['lengthtypeinvalid'];
+								if(intval($instance->getConfig('allowlength')) <= 0) $output['errors'][] = $LANG['lengthinvalid'];
+								if(!in_array($instance->getConfig('allowlength_type'), array('seconds','minutes','hours','days'))) $output['errors'][] = $LANG['lengthtypeinvalid'];
 							}
 						}
 						else
@@ -360,11 +449,11 @@ function csfmanager_clientarea($vars)
 
 		$tplfile = 'csfmanagerallowconfirm';
 	}
-	elseif($config['permission_allowemail'] && $action == 'cancel' && strlen($key) == 32)
+	elseif($instance->getConfig('permission_allowemail') && $action == 'cancel' && strlen($key) == 32)
 	{
 		$sql = "SELECT *
 			FROM mod_csfmanager_allow_keys
-			WHERE key_hash = '" . mysql_real_escape_string($key) . "'
+			WHERE key_hash = '" . mysql_escape_string($key) . "'
 			AND key_clicks_remained > 0
 			AND key_expire > '" . time() . "'
 			AND key_cancelled = 0";
@@ -380,7 +469,7 @@ function csfmanager_clientarea($vars)
 				AND p.type IN ('hostingaccount','reselleraccount','server')
 				INNER JOIN tblservers as s
 				ON h.server = s.id
-				" . (trim($config['servers']) ? "AND s.id IN ({$config['servers']})" : '') . "
+				" . (trim($instance->getConfig('servers')) ? "AND s.id IN (" . $instance->getConfig('servers') . ")" : '') . "
 				INNER JOIN tblclients as c
 				ON h.userid = c.id
 				WHERE h.domainstatus = 'Active'
@@ -421,13 +510,13 @@ function csfmanager_clientarea($vars)
 
 			foreach($pages as $i => $pagename)
 			{
-				if($config['permission_' . $pagename])
+				if($instance->getConfig('permission_' . $pagename))
 				{
 					$allowed_pages[] = $pagename;
 				}
 			}
 
-			if($config['permission_allow'] || $config['permission_allowemail'])
+			if($instance->getConfig('permission_allow') || $instance->getConfig('permission_allowemail'))
 			{
 				$allowed_pages[] = 'whitelisted';
 				$allowed_pages[] = 'emailkeys';
@@ -467,7 +556,7 @@ function csfmanager_clientarea($vars)
 			foreach($allowed_pages as $i => $allowed_page)
 			{
 				$firewall_menu->addChild(ucfirst($allowed_page), array(
-					'label' 	=> $LANG[$allowed_page . 'tab'],
+					'label' 	=> $instance->lang($allowed_page . 'tab'),
 					'uri' 		=> $modulelink . '&page=' . $allowed_page . '&id=' . $pid,
 					'order' 	=> $i,
 					'current'	=> $page == $allowed_page ? true : false,
@@ -486,7 +575,7 @@ function csfmanager_clientarea($vars)
 					ON p.gid = g.id
 					INNER JOIN tblservers as s
 					ON h.server = s.id
-					" . (trim($config['servers']) ? "AND s.id IN ({$config['servers']})" : '') . "
+					" . (trim($instance->getConfig('servers')) ? "AND s.id IN (" . $instance->getConfig('servers') . ")" : '') . "
 					INNER JOIN tblclients as c
 					ON c.id = h.userid
 					WHERE h.domainstatus = 'Active'
@@ -500,7 +589,7 @@ function csfmanager_clientarea($vars)
 					$product_details['password'] = decrypt($product_details['password'], $cc_encryption_hash);
 					$output['server'] = $product_details['name'];
 
-					$response = checkCsfAlive($product_details);
+					$response = csfmanager::checkCsfAlive($product_details);
 
 					if(!$response['success'])
 					{
@@ -537,7 +626,7 @@ function csfmanager_clientarea($vars)
 								$response = $cpanel->request($cgifile, array(
 									'action'	=> 'conf',
 								));
-
+								
 								if($response['success'])
 								{
 									$html = str_get_dom($response['output']);
@@ -564,12 +653,14 @@ function csfmanager_clientarea($vars)
 
 									$output['denied_countries'] = array();
 
+									$countries_ary = $LANG['countries_ary'];
+										
 									foreach($denied_countries as $country)
 									{
 										if(!trim($country)) continue;
-
+										
 										$output['denied_countries'][] = array(
-											'name'		=> $LANG['countries_ary'][strtoupper($country)],
+											'name'		=> $countries_ary[strtoupper($country)],
 											'code'		=> $country,
 											'flag'		=> "modules/addons/csfmanager/images/flags/{$country}.png",
 										);
@@ -584,7 +675,7 @@ function csfmanager_clientarea($vars)
 										if(!trim($country)) continue;
 
 										$output['allowed_countries'][] = array(
-											'name'		=> $LANG['countries_ary'][strtoupper($country)],
+											'name'		=> $countries_ary[strtoupper($country)],
 											'code'		=> $country,
 											'flag'		=> "modules/addons/csfmanager/images/flags/{$country}.png",
 										);
@@ -605,7 +696,7 @@ function csfmanager_clientarea($vars)
 
 								if($ip)
 								{
-									if($canrelease && $config['permission_aunblock'])
+									if($canrelease && $instance->getConfig('permission_aunblock'))
 									{
 										if($Firewall->setIP($ip))
 										{
@@ -619,7 +710,7 @@ function csfmanager_clientarea($vars)
 									}
 								}
 
-								$response = $Firewall->checkIP(null, $config['checkbrute']);
+								$response = $Firewall->checkIP(null, $instance->getConfig('checkbrute'));
 
 								if($response['success'] && sizeof($response['data']))
 								{
@@ -632,29 +723,43 @@ function csfmanager_clientarea($vars)
 
 								if(sizeof($block_data))
 								{
-									$print_reasons = true;
+									$print_reasons_csf = $print_reasons_brute = true;
 
 									if($action == 'unblock' && (($custom_ip && $canrelease) || !$custom_ip || !$aid))
 									{
-										$unblock = $Firewall->releaseIP($config['checkbrute']);
+										$unblock = $Firewall->releaseIP($instance->getConfig('checkbrute'));
 
-										if($unblock)
+										if($unblock['csf']['success'])
 										{
-											logActivity("Jetserver CSF Manager :: <a href=\"clientssummary.php?userid={$uid}\">Client ID: {$uid}</a> released the IP {$cip}");
-											$output['successes'][] = sprintf($LANG['ipreleasedok'], $cip);
-											$print_reasons = false;
+											logActivity("Jetserver CSF Manager :: Client ID: {$uid} released the IP {$cip} from CSF");
+											$output['successes'][] = sprintf($LANG['ipreleasedok'], $cip, 'CSF');
+											$print_reasons_csf = false;
 										}
 										else
 										{
-											$output['errors'][] = sprintf($LANG['cantunblockip'], $cip);
+											$output['errors'][] = $unblock['csf']['message'];
+										}
+
+										if($instance->getConfig('checkbrute'))
+										{
+											if($unblock['brute']['success']) 
+											{
+												logActivity("Jetserver CSF Manager :: Client ID: {$uid} released the IP {$cip} from Brute Force");
+												$output['successes'][] = sprintf($LANG['ipreleasedok'], $cip, 'Brute Force');
+												$print_reasons_brute = false;
+											}
+											else
+											{
+												$output['errors'][] = $unblock['brute']['message'];
+											}
 										}
 									}
 
-									if($print_reasons)
+									if($print_reasons_csf || $print_reasons_brute)
 									{
-										$output['blockedreasons_csf'] = $block_data['csf'] ? $block_data['csf'] : array();
+										if($print_reasons_csf) $output['blockedreasons_csf'] = $block_data['csf'] ? $block_data['csf'] : array();
 
-										if($config['checkbrute'])
+										if($instance->getConfig('checkbrute') && $print_reasons_brute)
 										{
 											$output['blockedreasons_logins'] = $block_data['logins'] ? $block_data['logins'] : array();
 											$output['blockedreasons_brutes'] = $block_data['brutes'] ? $block_data['brutes'] : array();
@@ -670,15 +775,15 @@ function csfmanager_clientarea($vars)
 
 								if($submit)
 								{
-									$reason = $_REQUEST['reason'];
+									$reason = csfmanager::request_var('reason', '');
 
 									if($ip && $reason && preg_match("/^[a-zA-Z\d\s]+$/", $reason))
 									{
 										if($Firewall->setIP($ip))
 										{
-											if(intval($config['allowlength']) > 0 && in_array($config['allowlength_type'], array('seconds','minutes','hours','days')))
+											if(intval($instance->getConfig('allowlength')) > 0 && in_array($instance->getConfig('allowlength_type'), array('seconds','minutes','hours','days')))
 											{
-												$allow = $Firewall->temporaryAllow($config['allowlength'], $config['allowlength_type'], $reason);
+												$allow = $Firewall->temporaryAllow($instance->getConfig('allowlength'), $instance->getConfig('allowlength_type'), $reason);
 
 												if($allow['success'])
 												{
@@ -689,7 +794,7 @@ function csfmanager_clientarea($vars)
 													if(strpos($response, "{$ip} allowed") !== false)
 													{
 														logActivity("Jetserver CSF Manager :: <a href=\"clientssummary.php?userid={$uid}\">Client ID: {$uid}</a> whitelisted the IP {$ip}");
-														$output['successes'][] = sprintf($LANG['tempallowipok'], $ip, $config['allowlength'], $LANG[strtolower($config['allowlength_type'])]);
+														$output['successes'][] = sprintf($LANG['tempallowipok'], $ip, $instance->getConfig('allowlength'), $instance->lang(strtolower($instance->getConfig('allowlength_type'))));
 
 														$allowlength = array(
 															'seconds'	=> 1,
@@ -701,7 +806,7 @@ function csfmanager_clientarea($vars)
 														$now = time();
 
 														$sql = "INSERT INTO mod_csfmanager_allow (`clientid`,`serverid`,`ip`,`time`,`expiration`,`reason`) VALUES
-															('{$uid}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($config['allowlength_type'])] * $config['allowlength'])) . "','" . mysql_real_escape_string($reason) . "')";
+															('{$uid}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysql_escape_string($reason) . "')";
 														mysql_query($sql);
 													}
 													else
@@ -719,8 +824,8 @@ function csfmanager_clientarea($vars)
 											}
 											else
 											{
-												if(intval($config['allowlength']) <= 0) $output['errors'][] = $LANG['lengthinvalid'];
-												if(!in_array($config['allowlength_type'], array('seconds','minutes','hours','days'))) $output['errors'][] = $LANG['lengthtypeinvalid'];
+												if(intval($instance->getConfig('allowlength')) <= 0) $output['errors'][] = $LANG['lengthinvalid'];
+												if(!in_array($instance->getConfig('allowlength_type'), array('seconds','minutes','hours','days'))) $output['errors'][] = $LANG['lengthtypeinvalid'];
 											}
 										}
 										else
@@ -744,13 +849,13 @@ function csfmanager_clientarea($vars)
 
 								if($submit)
 								{
-									$fullname = trim(mysql_real_escape_string($_REQUEST['fullname']));
+									$fullname = trim(mysql_escape_string(csfmanager::request_var('fullname', '')));
 
-									if($fullname && $email && csfValidateEmail($email))
+									if($fullname && $email && csfmanager::csfValidateEmail($email))
 									{
 										$sql = "SELECT key_id
 											FROM mod_csfmanager_allow_keys
-											WHERE key_email = '" . mysql_real_escape_string($email) . "'
+											WHERE key_email = '" . mysql_escape_string($email) . "'
 											AND key_clicks_remained > 0
 											AND key_expire > '" . time() . "'
 											AND user_id = '{$product_details['client_id']}'
@@ -772,7 +877,7 @@ function csfmanager_clientarea($vars)
 											$valid_days = 365;
 											$valid_clicks = 10;
 
-											$sendmail = sendCSFmail('CSF Manager Whitelist by Email', $email, $fullname, array(
+											$sendmail = csfmanager::sendCSFmail('CSF Manager Whitelist by Email', $email, $fullname, array(
 												'emailfullname'		=> $fullname,
 												'firstname'		=> $product_details['firstname'],
 												'lastname'		=> $product_details['lastname'],
@@ -811,11 +916,11 @@ function csfmanager_clientarea($vars)
 							case 'emailkeys':
 							case 'whitelisted':
 
-								$pagetitle = $LANG[$page . 'tab'];
+								$pagetitle = $instance->lang($page . 'tab');
 
-								$remove = intval($_REQUEST['remove']);
-								$cancel = intval($_REQUEST['cancel']);
-								$resend = intval($_REQUEST['resend']);
+								$remove = csfmanager::request_var('remove', 0);
+								$cancel = csfmanager::request_var('cancel', 0);
+								$resend = csfmanager::request_var('resend', 0);
 
 								if($resend)
 								{
@@ -837,7 +942,7 @@ function csfmanager_clientarea($vars)
 										$whitelist_url = "{$sysurl}/index.php?m=csfmanager&action=allow&key={$key_details['key_hash']}";
 										$cancel_url = "{$sysurl}/index.php?m=csfmanager&action=cancel&key={$key_details['key_hash']}";
 
-										$sendmail = sendCSFmail('CSF Manager Whitelist by Email', $key_details['key_email'], $key_details['key_recipient'], array(
+										$sendmail = csfmanager::sendCSFmail('CSF Manager Whitelist by Email', $key_details['key_email'], $key_details['key_recipient'], array(
 											'emailfullname'		=> $key_details['key_recipient'],
 											'firstname'		=> $product_details['firstname'],
 											'lastname'		=> $product_details['lastname'],
@@ -1007,7 +1112,7 @@ function csfmanager_clientarea($vars)
 				ON p.gid = g.id
 				INNER JOIN tblservers as s
 				ON h.server = s.id
-				" . (trim($config['servers']) ? "AND s.id IN ({$config['servers']})" : '') . "
+				" . (trim($instance->getConfig('servers')) ? "AND s.id IN (" . $instance->getConfig('servers') . ")" : '') . "
 				WHERE h.domainstatus = 'Active'
 				AND h.userid = '{$_SESSION['uid']}'
 				ORDER BY h.id DESC"; 
@@ -1027,14 +1132,14 @@ function csfmanager_clientarea($vars)
 		$output['errors'][] = "You are not logged in";
 		$tplfile = 'csfmanagererror';
 	}
-
+	
 	return array(
 		'pagetitle' 	=> $LANG['csfmanagertitle'] . ($pagetitle ? " - {$pagetitle}" : ''),
 		'breadcrumb' 	=> $breadcrumb,
-		'templatefile' 	=> "template/{$tplfile}",
+		'templatefile' 	=> "clientarea/{$tplfile}",
 		'requirelogin' 	=> false,
 		'vars' 		=> array_merge($output, array(
-			'modulepath'	=> dirname(__FILE__),
+			'modulepath'	=> JCSF_ROOT_PATH,
 			'modulelink'	=> $modulelink,
 
 			'pid' 		=> $pid,
@@ -1043,7 +1148,9 @@ function csfmanager_clientarea($vars)
 			'cip'		=> $cip,
 			'sip'		=> $_SERVER['REMOTE_ADDR'],
 
-			'config'	=> $config,
+			'config'	=> array(
+				'permission_aunblock'		=> $instance->getConfig('permission_aunblock'),
+			),
 			'page' 		=> $page,
 			'action' 	=> $action,
 			'ip' 		=> $ip,

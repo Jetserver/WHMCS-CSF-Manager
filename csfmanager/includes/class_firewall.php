@@ -98,7 +98,7 @@ class Firewall
 	{
 		if($this->reseller) array('success' => 0, 'message' => "Temporary Allow is not supported with a CSF Manager reseller user defined only root user", 'data' => "");
 
-		$response = checkCsfAlive($this->whm_details);
+		$response = csfmanager::checkCsfAlive($this->whm_details);
 
 		if($response['success'])
 		{
@@ -211,20 +211,19 @@ class Firewall
 
 	function releaseIP($checkbrute = true)
 	{
-		$csfRelease = $this->releaseCsfRecord();
-		$bruteRelease = $checkbrute ? $this->flushBruteDB() : true;
+		$output = array('csf' => array(), 'brute' => array());
+		
+		$output['csf'] = $this->releaseCsfRecord();
+		$output['brute'] = $checkbrute ? $this->flushBruteDB() : array('success' => true, 'message' => '');
 
-		if($csfRelease && $bruteRelease)
-		{
-			return true;
-		}
-
-		return false;
+		return $output;
 	}
 
 	function releaseCsfRecord()
 	{
-		$response = checkCsfAlive($this->whm_details);
+		$output = array('success' => false, 'message' => '');
+		
+		$response = csfmanager::checkCsfAlive($this->whm_details);
 
 		if($response['success'])
 		{
@@ -233,15 +232,20 @@ class Firewall
 				'ip'		=> $this->ip,
 			));
 
-			return (strpos($response['output'], 'Removing rule...') !== false || strpos($response['output'], 'temporary block removed') !== false) ? true : false;
+			$output['success'] = (strpos($response['output'], 'Removing rule...') !== false || strpos($response['output'], 'temporary block removed') !== false) ? true : false;
+			$output['message'] = !$output['success'] ? 'CSF Failed to remove the record' : '';
 		}
-
-		return false;
+		else
+		{
+			$output = $response; 
+		}
+		
+		return $output;
 	}
 
 	function quickUnblock()
 	{
-		$response = checkCsfAlive($this->whm_details);
+		$response = csfmanager::checkCsfAlive($this->whm_details);
 
 		if($response['success'])
 		{
@@ -260,7 +264,7 @@ class Firewall
 	{
 		$output = array('success' => false, 'message' => array(), 'type' => null, 'blocked' => false);
 
-		$response = checkCsfAlive($this->whm_details);
+		$response = csfmanager::checkCsfAlive($this->whm_details);
 
 		if($response['success'])
 		{
@@ -343,7 +347,7 @@ class Firewall
 			'ip'		=> $this->ip,
 		));
 
-		return $data['success'];
+		return $response;
 	}
 
 	function getBruteRecords()
