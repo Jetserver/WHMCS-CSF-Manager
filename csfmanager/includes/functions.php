@@ -25,7 +25,7 @@ class csfmanager
 
 			$this->config[$config_details['name']] = $config_details['value'];
 		}
-		mysql_free_result($result);
+		//mysql_free_result($result);
 
 		$this->_loadLanguage();
 	}

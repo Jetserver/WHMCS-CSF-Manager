@@ -34,7 +34,7 @@ class jcsf_settings_default
 		{
 			$output['data']['servers'][$server_details['id']] = array_merge(array('selected' => in_array($server_details['id'], explode(',', $instance->getConfig('servers'))) ? true : false), $server_details);
 		}
-		mysql_free_result($result);
+		//mysql_free_result($result);
 
 		return $output;
 	}

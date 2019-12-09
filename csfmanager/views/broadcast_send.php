@@ -57,7 +57,7 @@ class jcsf_broadcast_send extends jcsf_broadcast_default
 		{
 			$output['data']['servers'][$server_details['id']] = array_merge($server_details, array('password' => decrypt($server_details['password'], $cc_encryption_hash)));
 		}
-		mysql_free_result($result);
+		//mysql_free_result($result);
 
 		if(!isset($output['data']['servers'][$server_id]))
 		{
