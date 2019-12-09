@@ -371,7 +371,8 @@ class csfmanager
 			return $output;
 		}
 	
-		if(method_exists($whmcs, 'load_class')) $whmcs->load_class("phpmailer");
+		//if(method_exists($whmcs, 'load_class')) $whmcs->load_class("phpmailer");
+		include_once(ROOTDIR . "/vendor/phpmailer/phpmailer/PHPMailerAutoload.php");
 		$mail = new PHPMailer(true);
 												
 		try 
