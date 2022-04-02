@@ -39,10 +39,10 @@ class jcsf_allowedlog_default
 			LEFT JOIN tblservers as s
 			ON s.id = a.serverid
 			WHERE a.expiration > '" . time() . "'
-			" . (trim($search['clientname']) ? "AND UPPER(CONCAT_WS(' ', c.firstname, c.lastname)) LIKE UPPER('%" . mysql_escape_string(trim($search['clientname'])) . "%')" : '') . "
+			" . (trim($search['clientname']) ? "AND UPPER(CONCAT_WS(' ', c.firstname, c.lastname)) LIKE UPPER('%" . mysqli_real_escape_string(trim($search['clientname'])) . "%')" : '') . "
 			" . (intval($search['server']) ? "AND s.id = '" . intval($search['server']) . "'" : '') . "
-			" . (trim($search['ip']) ? "AND a.ip LIKE '%" . mysql_escape_string(trim($search['ip'])) . "%'" : '') . "
-			" . (trim($search['reason']) ? "AND a.reason LIKE '%" . mysql_escape_string(trim($search['reason'])) . "%'" : '') . "
+			" . (trim($search['ip']) ? "AND a.ip LIKE '%" . mysqli_real_escape_string(trim($search['ip'])) . "%'" : '') . "
+			" . (trim($search['reason']) ? "AND a.reason LIKE '%" . mysqli_real_escape_string(trim($search['reason'])) . "%'" : '') . "
 			ORDER BY a.time DESC";
 		$result = mysql_query($sql);
 
@@ -53,7 +53,7 @@ class jcsf_allowedlog_default
 		{
 			$output['data']['list'][] = array_merge($allow_details, array('time' => date("d/m/Y H:i", $allow_details['time']), 'expiration' => date("d/m/Y H:i", $allow_details['expiration'])));
 		}
-		mysql_free_result($result);
+		mysqli_fetch_assoc($result);
 		
 		$output['data']['current_page'] = (($start / $limit) + 1);
 		$output['data']['total_pages'] = ceil(abs($output['data']['total'] / $limit));
@@ -72,7 +72,7 @@ class jcsf_allowedlog_default
 		{
 			$output['data']['servers'][$server_details['id']] = array_merge($server_details, array('password' => decrypt($server_details['password'], $cc_encryption_hash)));
 		}
-		mysql_free_result($result);
+		mysqli_fetch_assoc($result);
 		
 		return $output;
 	}

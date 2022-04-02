@@ -43,7 +43,7 @@ class jcsf_broadcast_apply extends jcsf_broadcast_default
 		{
 			$output['data']['servers'][$server_details['id']] = array_merge($server_details, array('password' => decrypt($server_details['password'], $cc_encryption_hash)));
 		}
-		mysql_free_result($result);
+		mysqli_fetch_assoc($result);
 
 		$config_vars = csfmanager::request_var('configVars', array());
 
