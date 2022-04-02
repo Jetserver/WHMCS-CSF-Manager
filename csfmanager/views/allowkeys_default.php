@@ -51,11 +51,11 @@ class jcsf_allowkeys_default
 			ON s.id = k.server_id
 			WHERE key_id > 0 
 			" . ($status_query ? "AND {$status_query}" : '') . "
-			" . (trim($search['clientname']) ? "AND UPPER(CONCAT_WS(' ', c.firstname, c.lastname)) LIKE UPPER('%" . mysql_escape_string(trim($search['clientname'])) . "%')" : '') . "
+			" . (trim($search['clientname']) ? "AND UPPER(CONCAT_WS(' ', c.firstname, c.lastname)) LIKE UPPER('%" . mysqli_real_escape_string(trim($search['clientname'])) . "%')" : '') . "
 			" . (intval($search['server']) ? "AND s.id = '" . intval($search['server']) . "'" : '') . "
-			" . (trim($search['recipient']) ? "AND k.key_recipient LIKE '%" . mysql_escape_string(trim($search['recipient'])) . "%'" : '') . "
-			" . (trim($search['email']) ? "AND k.key_email LIKE '%" . mysql_escape_string(trim($search['email'])) . "%'" : '') . "
-			" . (trim($search['key']) ? "AND k.key_hash LIKE '%" . mysql_escape_string(trim($search['key'])) . "%'" : '') . "
+			" . (trim($search['recipient']) ? "AND k.key_recipient LIKE '%" . mysqli_real_escape_string(trim($search['recipient'])) . "%'" : '') . "
+			" . (trim($search['email']) ? "AND k.key_email LIKE '%" . mysqli_real_escape_string(trim($search['email'])) . "%'" : '') . "
+			" . (trim($search['key']) ? "AND k.key_hash LIKE '%" . mysqli_real_escape_string(trim($search['key'])) . "%'" : '') . "
 			ORDER BY k.key_id DESC";
 		$result = mysql_query($sql);
 
@@ -67,7 +67,7 @@ class jcsf_allowkeys_default
 		{
 			$output['data']['list'][] = array_merge($key_details, array('key_expire_date' => date("d/m/Y H:i", $key_details['key_expire'])));
 		}
-		mysql_free_result($result);
+		mysqli_fetch_assoc($result);
 		
 		$output['data']['current_page'] = (($start / $limit) + 1);
 		$output['data']['total_pages'] = ceil(abs($output['data']['total'] / $limit));
@@ -85,7 +85,7 @@ class jcsf_allowkeys_default
 		{
 			$output['data']['servers'][$server_details['id']] = array_merge($server_details, array('password' => decrypt($server_details['password'], $cc_encryption_hash)));
 		}
-		mysql_free_result($result);
+		mysqli_fetch_assoc($result);
 		
 		return $output;
 	}

@@ -331,7 +331,7 @@ function csfmanager_clientarea($vars)
 	{
 		$sql = "SELECT *
 			FROM mod_csfmanager_allow_keys
-			WHERE key_hash = '" . mysql_escape_string($key) . "'
+			WHERE key_hash = '" . mysqli_real_escape_string($key) . "'
 			AND key_clicks_remained > 0
 			AND key_expire > '" . time() . "'
 			AND key_cancelled = 0";
@@ -399,7 +399,7 @@ function csfmanager_clientarea($vars)
 										$now = time();
 
 										$sql = "INSERT INTO mod_csfmanager_allow (`clientid`,`serverid`,`ip`,`time`,`expiration`,`reason`) VALUES
-											('{$key_details['user_id']}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysql_escape_string($reason) . "')";
+											('{$key_details['user_id']}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysqli_real_escape_string($reason) . "')";
 										mysql_query($sql);
 
 										$sql = "UPDATE mod_csfmanager_allow_keys
@@ -453,7 +453,7 @@ function csfmanager_clientarea($vars)
 	{
 		$sql = "SELECT *
 			FROM mod_csfmanager_allow_keys
-			WHERE key_hash = '" . mysql_escape_string($key) . "'
+			WHERE key_hash = '" . mysqli_real_escape_string($key) . "'
 			AND key_clicks_remained > 0
 			AND key_expire > '" . time() . "'
 			AND key_cancelled = 0";
@@ -806,7 +806,7 @@ function csfmanager_clientarea($vars)
 														$now = time();
 
 														$sql = "INSERT INTO mod_csfmanager_allow (`clientid`,`serverid`,`ip`,`time`,`expiration`,`reason`) VALUES
-															('{$uid}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysql_escape_string($reason) . "')";
+															('{$uid}','{$product_details['server_id']}','{$ip}','{$now}','" . ($now + ($allowlength[strtolower($instance->getConfig('allowlength_type'))] * $instance->getConfig('allowlength'))) . "','" . mysqli_real_escape_string($reason) . "')";
 														mysql_query($sql);
 													}
 													else
@@ -849,13 +849,13 @@ function csfmanager_clientarea($vars)
 
 								if($submit)
 								{
-									$fullname = trim(mysql_escape_string(csfmanager::request_var('fullname', '')));
+									$fullname = trim(mysqli_real_escape_string(csfmanager::request_var('fullname', '')));
 
 									if($fullname && $email && csfmanager::csfValidateEmail($email))
 									{
 										$sql = "SELECT key_id
 											FROM mod_csfmanager_allow_keys
-											WHERE key_email = '" . mysql_escape_string($email) . "'
+											WHERE key_email = '" . mysqli_real_escape_string($email) . "'
 											AND key_clicks_remained > 0
 											AND key_expire > '" . time() . "'
 											AND user_id = '{$product_details['client_id']}'
@@ -1053,7 +1053,7 @@ function csfmanager_clientarea($vars)
 									$output['allowedips'][$ip_details['id']]['time'] = date("d/m/Y H:i", $ip_details['time']);
 									$output['allowedips'][$ip_details['id']]['expiration'] = date("d/m/Y H:i", $ip_details['expiration']);
 								}
-								mysql_free_result($result);
+								mysqli_fetch_assoc($result);
 
 								$output['allowkeys'] = array();
 
@@ -1072,7 +1072,7 @@ function csfmanager_clientarea($vars)
 
 									$output['allowkeys'][$key_details['key_id']]['key_expired'] = ($key_details['key_expire'] <= time());
 								}
-								mysql_free_result($result);
+								mysqli_fetch_assoc($result);
 
 							break;
 						}
@@ -1122,7 +1122,7 @@ function csfmanager_clientarea($vars)
 			{
 				$output['services'][] = $product_details;
 			}
-			mysql_free_result($result);
+			mysqli_fetch_assoc($result);
 
 			$tplfile = 'csfmanagerproducts';
 		}
